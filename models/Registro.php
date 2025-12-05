@@ -1,6 +1,5 @@
 <?php
 class Registro extends Conectar
-
 {
     public function get_registro()
     {
@@ -10,29 +9,30 @@ class Registro extends Conectar
         $sql = $db->prepare($sql);
         $sql->execute();
         $resultado = $sql->fetchAll(PDO::FETCH_OBJ);
+        
         $Array = [];
         foreach ($resultado as $d) {
             $Array[] = [
                 'id' => (int)$d->id,
                 'nombre' => $d->nombre,
                 'apellido_paterno' => $d->apellido_paterno,
-                'apellido_materno' => (int)$d->apellido_materno,
-                'fecha_nacimiento' => (int)$d->fecha_nacimiento,
-                'correo' => (int)$d->correo,
-                'telefono' => (int)$d->telefono,
-                'usuario' => (int)$d->usuario,
-                'password' => (int)$d->password,
+                'apellido_materno' => (isset($d->apellido_materno) ? $d->apellido_materno : ''),
+                'fecha_nacimiento' => $d->fecha_nacimiento,
+                'correo' => $d->correo,
+                'telefono' => $d->telefono,
+                'usuario' => $d->usuario,
+                'password' => $d->password,
                 'estatus' => (int)$d->estatus,
                 'tbl_municipio_id' => (int)$d->tbl_municipio_id,
                 'tbl_pais_id' => (int)$d->tbl_pais_id,
-                'tbl_estado_id' => (int)$d->tbl_estado_id
+                'tbl_estado_id' => (int)$d->tbl_estado_id,
+                'foto_perfil' => $d->foto_perfil // <--- NUEVO
             ];
         }
         return $Array;
     }
 
-
-    public function get_registro_x_id($registro_id)
+  public function get_registro_x_id($registro_id)
     {
         $conectar = parent::conexion();
         parent::set_names();
@@ -41,6 +41,7 @@ class Registro extends Conectar
         $sql->bindValue(1, $registro_id);
         $sql->execute();
         $resultado = $sql->fetch(PDO::FETCH_OBJ);
+        
         $Array = $resultado ? [
             'id' => (int)$resultado->id,
             'nombre' => $resultado->nombre,
@@ -50,110 +51,134 @@ class Registro extends Conectar
             'correo' => $resultado->correo,
             'telefono' => $resultado->telefono,
             'usuario' => $resultado->usuario,
-            'password' => $resultado->password,
-            'tbl_municipio_id' => $resultado->tbl_municipio_id,
-            'tbl_pais_id' => $resultado->tbl_pais_id,
-            'tbl_estado_id' => $resultado->tbl_estado_id,
+            // 'password' => $resultado->password,  <-- ¡BORRA O COMENTA ESTA LÍNEA!
+            'tbl_municipio_id' => (int)$resultado->tbl_municipio_id,
+            'tbl_pais_id' => (int)$resultado->tbl_pais_id,
+            'tbl_estado_id' => (int)$resultado->tbl_estado_id,
+            'foto_perfil' => $resultado->foto_perfil
         ] : [];
         return $Array;
     }
 
-    public function insert_registro(
-        $nombre,
-        $apellido_paterno,
-        $apellido_materno,
-        $fecha_nacimiento,
-        $correo,
-        $telefono,
-        $usuario,
-        $password,
-        $tbl_municipio_id,
-        $tbl_pais_id,
-        $tbl_estado_id
-    ) {
-
-        // $descripcion = '
-        // <p>Hola <strong>$nombre_completo</strong></p>
-        // <p>Bienvenido a <span style="color: rgb(97, 189, 109);">Manage your Money</span>.</p>
-        // ';
-
-        // $descripcion = <<<HTML
-        // <h3>Hola Bienvenidos a Manage Your Money</h3>
-        // <p>Gracias por registrarte</p>
-        // HTML;
+    public function insert_registro($nombre, $apellido_paterno, $apellido_materno, $fecha_nacimiento, $correo, $telefono, $usuario, $password, $tbl_municipio_id, $tbl_pais_id, $tbl_estado_id, $foto_perfil)
+    {
+        if (strlen($fecha_nacimiento) > 10) {
+            $fecha_nacimiento = substr($fecha_nacimiento, 0, 10);
+        }
 
         $nombre_completo = $nombre . ' ' . $apellido_paterno;
-
-        $descripcion = "Bienvedio a Manage Your Money  $nombre_completo";
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT); // Genera el hash
-
-        $conectar = parent::conexion();
+        $descripcion = "Bienvenido a Manage Your Money $nombre_completo";
         $asunto = 'Registro MYM';
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-        // Instancerar una funcion en el mismo archivo
-        Registro::Correo($nombre_completo, $descripcion, $correo, $asunto);
+        try {
+            $this->Correo($nombre_completo, $descripcion, $correo, $asunto);
+        } catch (Exception $e) {}
 
         $conectar = parent::conexion();
         parent::set_names();
+        
         $sql = "INSERT INTO `tbl_registro`(`nombre`, `apellido_paterno`, `apellido_materno`, `fecha_nacimiento`,
-        `correo`, `telefono`, `usuario`, `password`, `tbl_municipio_id`, `tbl_pais_id`, `tbl_estado_id`) 
-        VALUES (?,?,?,?,?,?,?,?,?,?,?);";
-        $sql = $conectar->prepare($sql);
-        $sql->bindValue(1, $nombre);
-        $sql->bindValue(2, $apellido_paterno);
-        $sql->bindValue(3, $apellido_materno);
-        $sql->bindValue(4, $fecha_nacimiento);
-        $sql->bindValue(5, $correo);
-        $sql->bindValue(6, $telefono);
-        $sql->bindValue(7, $usuario);
-        $sql->bindValue(8, $hashed_password);
-        $sql->bindValue(9, $tbl_municipio_id);
-        $sql->bindValue(10, $tbl_pais_id);
-        $sql->bindValue(11, $tbl_estado_id);
-        $resultado['estatus'] =  $sql->execute();
-        $lastInserId =  $conectar->lastInsertId();
-        if ($lastInserId != "0") {
-            $resultado['id'] = (int)$lastInserId;
+        `correo`, `telefono`, `usuario`, `password`, `tbl_municipio_id`, `tbl_pais_id`, `tbl_estado_id`, `foto_perfil`) 
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"; // Agregamos un ? más
+        
+        try {
+            $sql = $conectar->prepare($sql);
+            $sql->bindValue(1, $nombre);
+            $sql->bindValue(2, $apellido_paterno);
+            $sql->bindValue(3, $apellido_materno);
+            $sql->bindValue(4, $fecha_nacimiento);
+            $sql->bindValue(5, $correo);
+            $sql->bindValue(6, $telefono);
+            $sql->bindValue(7, $usuario);
+            $sql->bindValue(8, $hashed_password);
+            $sql->bindValue(9, $tbl_municipio_id);
+            $sql->bindValue(10, $tbl_pais_id);
+            $sql->bindValue(11, $tbl_estado_id);
+            $sql->bindValue(12, $foto_perfil); // <--- NUEVO BIND
+            
+            $execute = $sql->execute();
+            $resultado = ['estatus' => $execute];
+            
+            $lastInserId = $conectar->lastInsertId();
+            if ($lastInserId != "0") {
+                $resultado['id'] = (int)$lastInserId;
+            }
+            return $resultado;
+
+        } catch (PDOException $e) {
+            return ['estatus' => false, 'mensaje' => 'Error BD: ' . $e->getMessage()];
         }
-        return $resultado;
     }
 
-    public function update_registro(
-        $nombre, 
-        $apellido_paterno, 
-        $apellido_materno, 
-        $fecha_nacimiento, 
-        $correo, 
-        $telefono, 
-        $usuario, 
-        $password, 
-        $estatus, 
-        $tbl_municipio_id, 
-        $tbl_pais_id, 
-        $tbl_estado_id, 
-        $id)
-    {
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT); // Genera el hash
+   public function update_registro(
+        $nombre, $apellido_paterno, $apellido_materno, $fecha_nacimiento, 
+        $correo, $telefono, $usuario, $password, $estatus, 
+        $tbl_municipio_id, $tbl_pais_id, $tbl_estado_id, $foto_perfil, $id
+    ) {
+        // Corrección de fecha
+        if (strlen($fecha_nacimiento) > 10) {
+            $fecha_nacimiento = substr($fecha_nacimiento, 0, 10);
+        }
+
         $conectar = parent::conexion();
         parent::set_names();
-        $sql = "UPDATE `tbl_registro` SET `nombre`= ?, `apellido_paterno`= ?, `apellido_materno`= ?,`fecha_nacimiento`= ? ,`correo`= ?,
-        `telefono`= ? ,`usuario`= ? ,`password`= ? ,`tbl_municipio_id`= ? ,`tbl_pais_id`= ?,`tbl_estado_id`= ? 
-        WHERE id = ?;";
-        $sql = $conectar->prepare($sql);
-        $sql->bindValue(1, $nombre);
-        $sql->bindValue(2, $apellido_paterno);
-        $sql->bindValue(3, $apellido_materno);
-        $sql->bindValue(4, $fecha_nacimiento);
-        $sql->bindValue(5, $correo);
-        $sql->bindValue(6, $telefono);
-        $sql->bindValue(7, $usuario);
-        $sql->bindValue(8, $hashed_password);
-        $sql->bindValue(9, $tbl_municipio_id);
-        $sql->bindValue(10, $tbl_pais_id);
-        $sql->bindValue(11, $tbl_estado_id);
-        $sql->bindValue(12, $id);
-        $resultado['estatus'] = $sql->execute();
-        return $resultado;
+        
+        // LÓGICA DE CONTRASEÑA INTELIGENTE
+        if (!empty($password)) {
+            // CASO A: El usuario escribió una NUEVA contraseña. La encriptamos y actualizamos TODO.
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            
+            $sql = "UPDATE `tbl_registro` SET `nombre`= ?, `apellido_paterno`= ?, `apellido_materno`= ?, `fecha_nacimiento`= ? ,`correo`= ?,
+            `telefono`= ? ,`usuario`= ? ,`password`= ? ,`tbl_municipio_id`= ? ,`tbl_pais_id`= ?,`tbl_estado_id`= ?, `foto_perfil`= ? 
+            WHERE id = ?;";
+            
+            $stmt = $conectar->prepare($sql);
+            // Binds normales (13 parámetros)
+            $stmt->bindValue(1, $nombre);
+            $stmt->bindValue(2, $apellido_paterno);
+            $stmt->bindValue(3, $apellido_materno);
+            $stmt->bindValue(4, $fecha_nacimiento);
+            $stmt->bindValue(5, $correo);
+            $stmt->bindValue(6, $telefono);
+            $stmt->bindValue(7, $usuario);
+            $stmt->bindValue(8, $hashed_password); // <--- Nueva contraseña encriptada
+            $stmt->bindValue(9, $tbl_municipio_id);
+            $stmt->bindValue(10, $tbl_pais_id);
+            $stmt->bindValue(11, $tbl_estado_id);
+            $stmt->bindValue(12, $foto_perfil);
+            $stmt->bindValue(13, $id);
+
+        } else {
+            // CASO B: El campo password está VACÍO. Mantenemos la contraseña vieja (No la incluimos en el SQL).
+            
+            $sql = "UPDATE `tbl_registro` SET `nombre`= ?, `apellido_paterno`= ?, `apellido_materno`= ?, `fecha_nacimiento`= ? ,`correo`= ?,
+            `telefono`= ? ,`usuario`= ? ,`tbl_municipio_id`= ? ,`tbl_pais_id`= ?,`tbl_estado_id`= ?, `foto_perfil`= ? 
+            WHERE id = ?;";
+            
+            $stmt = $conectar->prepare($sql);
+            // Binds sin password (12 parámetros)
+            $stmt->bindValue(1, $nombre);
+            $stmt->bindValue(2, $apellido_paterno);
+            $stmt->bindValue(3, $apellido_materno);
+            $stmt->bindValue(4, $fecha_nacimiento);
+            $stmt->bindValue(5, $correo);
+            $stmt->bindValue(6, $telefono);
+            $stmt->bindValue(7, $usuario);
+            // Saltamos el 8 (password) y seguimos con los demás
+            $stmt->bindValue(8, $tbl_municipio_id);
+            $stmt->bindValue(9, $tbl_pais_id);
+            $stmt->bindValue(10, $tbl_estado_id);
+            $stmt->bindValue(11, $foto_perfil);
+            $stmt->bindValue(12, $id);
+        }
+        
+        try {
+            $resultado['estatus'] = $stmt->execute();
+            return $resultado;
+        } catch (PDOException $e) {
+             return ['estatus' => false, 'mensaje' => 'Error BD: ' . $e->getMessage()];
+        }
     }
 
     public function delete_registro($id)
@@ -168,32 +193,65 @@ class Registro extends Conectar
     }
 
     public function Correo($nombre, $description, $email, $asunto)
+
     {
 
+
+
         $curl_options = array(
+
             CURLOPT_HTTPHEADER => array(
+
                 'Content-Type: application/json; charset=utf-8'
+
             ),
+
             CURLOPT_RETURNTRANSFER => true,
+
             CURLOPT_HEADER => false,
+
             CURLOPT_POST => true,
+
             CURLOPT_SSL_VERIFYPEER => false
 
+
+
         );
+
         // Los datos que le vamos a mandar para armar el correo
+
         $fields = json_encode(array(
+
             "nombre" => $nombre,
+
             "concepto" => $description,
+
             "correo" => $email,
+
             "asunto" => $asunto
+
         ));
+
+
+
+        $url_pipedream = "https://eoz9fl1ucpbv1za.m.pipedream.net";
+
         // El tratado de la url con la peticion
+
         $curl = curl_init();
-        curl_setopt($curl, CURLOPT_URL, "https://eocr5b401bk1z2i.m.pipedream.net");
+
+        curl_setopt($curl, CURLOPT_URL, $url_pipedream);
+
         curl_setopt_array($curl, $curl_options);
+
         curl_setopt($curl, CURLOPT_POSTFIELDS, $fields);
+
         $response = json_decode(curl_exec($curl));
-        echo $response;
+
+        
+
         curl_close($curl);
+
     }
 }
+?>

@@ -1,29 +1,42 @@
 <?php
 class Login extends Conectar
 {
-
     public function Login_access($usuario, $password)
     {
-        $db = parent::conexion();
+        $conectar = parent::conexion();
         parent::set_names();
+        
         $sql = "SELECT * FROM tbl_registro WHERE usuario = ?";
-        $sql = $db->prepare($sql);
+        $sql = $conectar->prepare($sql);
         $sql->bindValue(1, $usuario);
         $sql->execute();
         $resultado = $sql->fetch(PDO::FETCH_OBJ);
-        if (!empty($resultado)) {
-            // Verificar si el password es correcto
-            if (password_verify($password, $resultado->password)){
-                $Array = [
+        
+        // Inicializamos la respuesta por defecto como fallo
+        $response = [
+            'estatus' => false,
+            'mensaje' => 'Usuario o contraseña incorrectos'
+        ];
+
+        if ($resultado) {
+            // El usuario existe, verificamos el password
+            if (password_verify($password, $resultado->password)) {
+                // Contraseña correcta
+                $response = [
+                    'estatus' => true,
                     'id' => (int)$resultado->id,
                     'usuario' => $resultado->usuario,
-                    'password' => $resultado->password,
-                    'estatus' => true,
+                    'foto_perfil' => $resultado->foto_perfil, // Importante para el Navbar
+                    // No devolvemos el password por seguridad
                 ];
             } else {
-                $Array['mensaje'] = 'Contraseña incorrecta';
+                $response['mensaje'] = 'Contraseña incorrecta';
             }
+        } else {
+            $response['mensaje'] = 'El usuario no existe';
         }
-        return $Array;
+        
+        return $response;
     }
 }
+?>
