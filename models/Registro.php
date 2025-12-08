@@ -51,7 +51,6 @@ class Registro extends Conectar
             'correo' => $resultado->correo,
             'telefono' => $resultado->telefono,
             'usuario' => $resultado->usuario,
-            // 'password' => $resultado->password,  <-- ¡BORRA O COMENTA ESTA LÍNEA!
             'tbl_municipio_id' => (int)$resultado->tbl_municipio_id,
             'tbl_pais_id' => (int)$resultado->tbl_pais_id,
             'tbl_estado_id' => (int)$resultado->tbl_estado_id,
@@ -80,7 +79,7 @@ class Registro extends Conectar
         
         $sql = "INSERT INTO `tbl_registro`(`nombre`, `apellido_paterno`, `apellido_materno`, `fecha_nacimiento`,
         `correo`, `telefono`, `usuario`, `password`, `tbl_municipio_id`, `tbl_pais_id`, `tbl_estado_id`, `foto_perfil`) 
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"; // Agregamos un ? más
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"; 
         
         try {
             $sql = $conectar->prepare($sql);
@@ -116,7 +115,6 @@ class Registro extends Conectar
         $correo, $telefono, $usuario, $password, $estatus, 
         $tbl_municipio_id, $tbl_pais_id, $tbl_estado_id, $foto_perfil, $id
     ) {
-        // Corrección de fecha
         if (strlen($fecha_nacimiento) > 10) {
             $fecha_nacimiento = substr($fecha_nacimiento, 0, 10);
         }
@@ -124,9 +122,9 @@ class Registro extends Conectar
         $conectar = parent::conexion();
         parent::set_names();
         
-        // LÓGICA DE CONTRASEÑA INTELIGENTE
+
         if (!empty($password)) {
-            // CASO A: El usuario escribió una NUEVA contraseña. La encriptamos y actualizamos TODO.
+            
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             
             $sql = "UPDATE `tbl_registro` SET `nombre`= ?, `apellido_paterno`= ?, `apellido_materno`= ?, `fecha_nacimiento`= ? ,`correo`= ?,
@@ -134,7 +132,7 @@ class Registro extends Conectar
             WHERE id = ?;";
             
             $stmt = $conectar->prepare($sql);
-            // Binds normales (13 parámetros)
+    
             $stmt->bindValue(1, $nombre);
             $stmt->bindValue(2, $apellido_paterno);
             $stmt->bindValue(3, $apellido_materno);
@@ -150,14 +148,13 @@ class Registro extends Conectar
             $stmt->bindValue(13, $id);
 
         } else {
-            // CASO B: El campo password está VACÍO. Mantenemos la contraseña vieja (No la incluimos en el SQL).
+           
             
             $sql = "UPDATE `tbl_registro` SET `nombre`= ?, `apellido_paterno`= ?, `apellido_materno`= ?, `fecha_nacimiento`= ? ,`correo`= ?,
             `telefono`= ? ,`usuario`= ? ,`tbl_municipio_id`= ? ,`tbl_pais_id`= ?,`tbl_estado_id`= ?, `foto_perfil`= ? 
             WHERE id = ?;";
             
             $stmt = $conectar->prepare($sql);
-            // Binds sin password (12 parámetros)
             $stmt->bindValue(1, $nombre);
             $stmt->bindValue(2, $apellido_paterno);
             $stmt->bindValue(3, $apellido_materno);
@@ -165,7 +162,6 @@ class Registro extends Conectar
             $stmt->bindValue(5, $correo);
             $stmt->bindValue(6, $telefono);
             $stmt->bindValue(7, $usuario);
-            // Saltamos el 8 (password) y seguimos con los demás
             $stmt->bindValue(8, $tbl_municipio_id);
             $stmt->bindValue(9, $tbl_pais_id);
             $stmt->bindValue(10, $tbl_estado_id);
@@ -253,5 +249,17 @@ class Registro extends Conectar
         curl_close($curl);
 
     }
+
+public function get_datos_usuario($id) {
+        $conectar = parent::conexion();
+        parent::set_names();
+        // Solo pedimos nombre y correo del ID específico
+        $sql = "SELECT nombre, apellido_paterno, correo FROM tbl_registro WHERE id = ?";
+        $sql = $conectar->prepare($sql);
+        $sql->bindValue(1, $id);
+        $sql->execute();
+        return $sql->fetch(PDO::FETCH_OBJ);
+    }
+
 }
 ?>

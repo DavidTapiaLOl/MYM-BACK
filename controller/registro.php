@@ -18,7 +18,6 @@ switch ($_GET["opcion"]) {
         break;
 
     case "Insert":
-        // Validar si viene foto_perfil, sino null
         $foto = isset($body["foto_perfil"]) ? $body["foto_perfil"] : null;
 
         $datos = $registros->insert_registro(

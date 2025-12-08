@@ -5,24 +5,74 @@ class Ingreso extends Conectar
     {
         $db = parent::conexion();
         parent::set_names();
-        $sql = "SELECT * FROM tbl_ingreso WHERE tbl_registro_id = ?;";
+
+        $sql = "SELECT 
+                    i.*,
+                    tp.nombre as nombre_tipo_pago,
+                    p.nombre as nombre_periodo,
+                    c.nombre as nombre_concepto
+                FROM tbl_ingreso i
+                LEFT JOIN tbl_tipo_pago tp ON i.tbl_tipo_pago_id = tp.id
+                LEFT JOIN tbl_periodo p ON i.tbl_periodo_id = p.id
+                LEFT JOIN tbl_concepto c ON i.tbl_concepto_id = c.id
+                WHERE i.tbl_registro_id = ?";
+
         $sql = $db->prepare($sql);
-        $sql -> bindValue(1, $id);
+        $sql->bindValue(1, $id);
         $sql->execute();
         $resultado = $sql->fetchAll(PDO::FETCH_OBJ);
+
         $Array = [];
         foreach ($resultado as $d) {
             $Array[] = [
-                'id' => (int)$d->id, '01_descripcion' => $d->descripcion,
-                '02_monto' => $d->monto,'03_fecha_registro' => $d->fecha_registro,'04_fecha_pago' => $d->fecha_pago
-                ,'tbl_concepto_id' => (int)$d->tbl_concepto_id,'tbl_tipo_pago_id' => (int)$d->tbl_tipo_pago_id
-                ,'tbl_periodo_id' => (int)$d->tbl_periodo_id,
-                'tbl_registro_id' => (int)$d->tbl_registro_id
+                'id' => (int)$d->id,
+                'tbl_tipo_pago_id' => (int)$d->tbl_tipo_pago_id,
+                'tbl_periodo_id' => (int)$d->tbl_periodo_id,
+                'tbl_concepto_id' => (int)$d->tbl_concepto_id,
+                'tbl_registro_id' => (int)$d->tbl_registro_id,
+                
+                // COLUMNAS VISIBLES (Con protección para nulos)
+                '01_descripcion' => $d->descripcion,
+                '02_monto' => $d->monto,
+                '03_tipo_pago' => $d->nombre_tipo_pago ? $d->nombre_tipo_pago : 'Sin Tipo',
+                '04_periodo' => $d->nombre_periodo ? $d->nombre_periodo : 'Sin Periodo',
+                '05_concepto' => $d->nombre_concepto ? $d->nombre_concepto : 'Sin Concepto',
+                '06_fecha' => $d->fecha_registro
             ];
         }
         return $Array;
     }
 
+    public function getinfo($id) {
+    $db = parent::conexion();
+    parent::set_names();
+
+    // Consultamos Ingresos y Egresos unidos, ordenados por fecha
+    $sql = "SELECT i.id, i.descripcion, i.monto, i.fecha_registro, 'Ingreso' as tipo_mov 
+            FROM tbl_ingreso i WHERE i.tbl_registro_id = ?
+            UNION ALL
+            SELECT e.id, e.descripcion, e.monto, e.fecha_registro, 'Egreso' as tipo_mov 
+            FROM tbl_egreso e WHERE e.tbl_registro_id = ?
+            ORDER BY fecha_registro DESC LIMIT 10";
+
+    $sql = $db->prepare($sql);
+    $sql->bindValue(1, $id);
+    $sql->bindValue(2, $id);
+    $sql->execute();
+    $resultado = $sql->fetchAll(PDO::FETCH_OBJ);
+
+    $Array = [];
+    foreach ($resultado as $d) {
+        $Array[] = [
+            'id' => (int)$d->id,
+            '01_descripcion' => $d->descripcion,
+            '02_monto' => $d->monto,
+            '03_tipo' => $d->tipo_mov, // Mostrará si es Ingreso o Egreso
+            '04_fecha' => $d->fecha_registro
+        ];
+    }
+    return $Array;
+}
 
     public function get_ingreso_x_id($registro_id)
     {
@@ -34,20 +84,20 @@ class Ingreso extends Conectar
         $sql->execute();
         $resultado = $sql->fetch(PDO::FETCH_OBJ);
         
-        // CORRECCIÓN: Eliminamos 'monto_general' porque esa columna no existe en la tabla
-        $Array = $resultado ? [
-            'id' => (int)$resultado->id,
-            'descripcion' => $resultado->descripcion,
-            'monto' => $resultado->monto,
-            // 'monto_general' => $resultado->monto_general,  <-- ELIMINAR ESTA LÍNEA
-            'fecha_registro' => $resultado->fecha_registro,
-            'fecha_pago' => $resultado->fecha_pago,
-            'tbl_concepto_id' => (int)$resultado->tbl_concepto_id,
-            'tbl_tipo_pago_id' => (int)$resultado->tbl_tipo_pago_id,
-            'tbl_periodo_id' => (int)$resultado->tbl_periodo_id,
-            'tbl_registro_id' => (int)$resultado->tbl_registro_id
-        ] : [];
-        return $Array;
+        if ($resultado) {
+            return [
+                'id' => (int)$resultado->id,
+                'descripcion' => $resultado->descripcion,
+                'monto' => $resultado->monto,
+                'fecha_registro' => $resultado->fecha_registro,
+                'fecha_pago' => $resultado->fecha_pago,
+                'tbl_concepto_id' => (int)$resultado->tbl_concepto_id,
+                'tbl_tipo_pago_id' => (int)$resultado->tbl_tipo_pago_id,
+                'tbl_periodo_id' => (int)$resultado->tbl_periodo_id,
+                'tbl_registro_id' => (int)$resultado->tbl_registro_id
+            ];
+        }
+        return [];
     }
 
     public function insert_ingreso($descripcion, $monto, $fecha_registro, $fecha_pago, $tbl_concepto_id, $tbl_tipo_pago_id, $tbl_periodo_id, $tbl_registro_id)
@@ -55,27 +105,29 @@ class Ingreso extends Conectar
         $conectar = parent::conexion();
         parent::set_names();
         
-        // CORRECCIÓN: Usamos CURDATE() directamente en el SQL
         $sql = "INSERT INTO `tbl_ingreso`(`descripcion`, `monto`, 
          `fecha_registro`, `fecha_pago`, `tbl_concepto_id`, `tbl_tipo_pago_id`, `tbl_periodo_id`, `tbl_registro_id`) 
-        VALUES (?,?, CURDATE(), ?,?,?,?,?);"; // <-- Quitamos un ? y pusimos CURDATE()
+        VALUES (?,?, CURDATE(), ?,?,?,?,?);"; 
         
-        $sql = $conectar->prepare($sql);
-        $sql->bindValue(1, $descripcion);
-        $sql->bindValue(2, $monto);
-        // $sql->bindValue(3, $fecha_registro); <-- ELIMINADO
-        $sql->bindValue(3, $fecha_pago);        // Recorremos índices
-        $sql->bindValue(4, $tbl_concepto_id);
-        $sql->bindValue(5, $tbl_tipo_pago_id);
-        $sql->bindValue(6, $tbl_periodo_id);
-        $sql->bindValue(7, $tbl_registro_id);
-        
-        $resultado['estatus'] =  $sql->execute();
-        $lastInserId =  $conectar->lastInsertId();
-        if ($lastInserId != "0") {
-            $resultado['id'] = (int)$lastInserId;
+        try {
+            $sql = $conectar->prepare($sql);
+            $sql->bindValue(1, $descripcion);
+            $sql->bindValue(2, $monto);
+            $sql->bindValue(3, $fecha_pago);
+            $sql->bindValue(4, $tbl_concepto_id);
+            $sql->bindValue(5, $tbl_tipo_pago_id);
+            $sql->bindValue(6, $tbl_periodo_id);
+            $sql->bindValue(7, $tbl_registro_id);
+            
+            $resultado['estatus'] =  $sql->execute();
+            $lastInserId =  $conectar->lastInsertId();
+            if ($lastInserId != "0") {
+                $resultado['id'] = (int)$lastInserId;
+            }
+            return $resultado;
+        } catch (PDOException $e) {
+            return ['estatus' => false, 'mensaje' => $e->getMessage()];
         }
-        return $resultado;
     }
 
     public function update_ingreso($descripcion, $monto, $fecha_registro, $fecha_pago, $tbl_concepto_id, $tbl_tipo_pago_id, $tbl_periodo_id, $tbl_registro_id, $id)
@@ -83,24 +135,26 @@ class Ingreso extends Conectar
         $conectar = parent::conexion();
         parent::set_names();
         
-        // CORRECCIÓN: Quitamos `fecha_registro` del UPDATE para que no se pueda cambiar
         $sql = "UPDATE `tbl_ingreso` SET `descripcion`= ?, `monto`= ?, 
         `fecha_pago`= ? ,`tbl_concepto_id`= ? ,`tbl_tipo_pago_id`= ? ,`tbl_periodo_id`= ? ,`tbl_registro_id`= ? 
         WHERE id = ?;";
         
-        $sql = $conectar->prepare($sql);
-        $sql->bindValue(1, $descripcion);
-        $sql->bindValue(2, $monto);
-        // $sql->bindValue(3, $fecha_registro); <-- ELIMINADO
-        $sql->bindValue(3, $fecha_pago);
-        $sql->bindValue(4, $tbl_concepto_id);
-        $sql->bindValue(5, $tbl_tipo_pago_id);
-        $sql->bindValue(6, $tbl_periodo_id);
-        $sql->bindValue(7, $tbl_registro_id);
-        $sql->bindValue(8, $id);
-        
-        $resultado['estatus'] = $sql->execute();
-        return $resultado;
+        try {
+            $sql = $conectar->prepare($sql);
+            $sql->bindValue(1, $descripcion);
+            $sql->bindValue(2, $monto);
+            $sql->bindValue(3, $fecha_pago);
+            $sql->bindValue(4, $tbl_concepto_id);
+            $sql->bindValue(5, $tbl_tipo_pago_id);
+            $sql->bindValue(6, $tbl_periodo_id);
+            $sql->bindValue(7, $tbl_registro_id);
+            $sql->bindValue(8, $id);
+            
+            $resultado['estatus'] = $sql->execute();
+            return $resultado;
+        } catch (PDOException $e) {
+            return ['estatus' => false, 'mensaje' => $e->getMessage()];
+        }
     }
 
     public function delete($id)
@@ -114,47 +168,21 @@ class Ingreso extends Conectar
         return $resultado;
     }
 
-    public function get_ingreso2($id)
-    {
-        $db = parent::conexion();
-        parent::set_names();
-        $sql = "SELECT * FROM tbl_ingreso WHERE tbl_registro_id = ?;";
-        $sql = $db->prepare($sql);
-        $sql->bindValue(1, $id);
-        $sql->execute();
-        $resultado = $sql->fetchAll(PDO::FETCH_OBJ);
-        $Array = [];
-        foreach ($resultado as $d) {
-            $Array[] = [
-                'id' => (int)$d->id, '01_descripcion' => $d->descripcion,
-                '02_monto' => $d->monto,'tbl_concepto_id' => (int)$d->tbl_concepto_id,'tbl_tipo_pago_id' => (int)$d->tbl_tipo_pago_id
-                ,'tbl_periodo_id' => (int)$d->tbl_periodo_id,
-                'tbl_registro_id' => (int)$d->tbl_registro_id,  '03_tipo' => 'Ingreso',
-                //  'ruta' => "ingreso"
-            ];
-        }
-        return $Array;
-    }
-
     public function get_suma($id)
     {
         $conectar = parent::conexion();
         parent::set_names();
-        $sql = "SELECT SUM(monto) as monto FROM tbl_ingreso  WHERE tbl_registro_id = ?";
+        $sql = "SELECT SUM(monto) as monto FROM tbl_ingreso WHERE tbl_registro_id = ?";
         $sql = $conectar->prepare($sql);
         $sql->bindValue(1, $id);
         $sql->execute();
         $resultado = $sql->fetch(PDO::FETCH_OBJ);
-        return $resultado -> monto;
+        return $resultado->monto;
     }
 
     public function get_monto($id){
         $conectar = parent::conexion();
         parent::set_names();
-        
-        // CORRECCIÓN SQL:
-        // 1. Usamos MAX(MONTHNAME(fecha)) para cumplir con ONLY_FULL_GROUP_BY.
-        // 2. Filtramos nulos en la subconsulta para evitar problemas.
         
         $sql = "SELECT 
                     MAX(MONTHNAME(fecha)) as mes_nombre, 
@@ -185,7 +213,6 @@ class Ingreso extends Conectar
             
             $Array = [];
             foreach ($resultado as $d) {
-                // Cálculo del balance
                 $ingreso = (float)$d->total_ingreso;
                 $egreso = (float)$d->total_egreso;
                 
@@ -199,12 +226,8 @@ class Ingreso extends Conectar
             return $Array;
 
         } catch (PDOException $e) {
-            // Si falla, devolvemos un array vacío para no romper la tabla del dashboard
-            // Opcional: Podrías loguear el error: error_log($e->getMessage());
             return [];
         }
     }
-
-
-    
 }
+?>

@@ -1,9 +1,9 @@
 <?php
-// cron_notificaciones.php
-// Este archivo busca pagos próximos y usa tu función Correo existente para avisar.
+
+header('Content-Type: application/json');
 
 require_once("../config/conexion.php");
-require_once("../models/Registro.php"); // Usamos el modelo que ya tiene la función Correo
+require_once("../models/Registro.php"); 
 
 class Notificador extends Conectar {
     
@@ -11,9 +11,8 @@ class Notificador extends Conectar {
         $conectar = parent::conexion();
         parent::set_names();
 
-        // 1. LÓGICA DEL REQUERIMIENTO:
-        // Buscamos egresos FIJOS (es_fijo = 1)
-        // Cuya fecha límite sea HOY o en los próximos 3 DÍAS.
+     
+        
         $sql = "SELECT 
                     e.descripcion, 
                     e.monto, 
@@ -24,34 +23,43 @@ class Notificador extends Conectar {
                 FROM tbl_egreso e
                 INNER JOIN tbl_registro u ON e.tbl_registro_id = u.id
                 WHERE e.es_fijo = 1 
+                AND e.fecha_limite IS NOT NULL
+                AND e.fecha_pago IS NULL
                 AND DATEDIFF(e.fecha_limite, CURDATE()) BETWEEN 0 AND 3";
 
-        $stmt = $conectar->prepare($sql);
-        $stmt->execute();
-        $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $conectar->prepare($sql);
+            $stmt->execute();
+            $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $registroModel = new Registro();
-        $contador = 0;
+            $registroModel = new Registro();
+            $contador = 0;
 
-        foreach ($pendientes as $p) {
-            $nombre_completo = $p['nombre'] . ' ' . $p['apellido_paterno'];
-            
-            // AQUÍ DEFINIMOS EL TEXTO DIFERENTE PARA EL RECORDATORIO
-            $asunto = "⏰ Recordatorio: Pago de " . $p['descripcion'];
-            $mensaje = "Hola $nombre_completo, te recordamos que tu pago fijo de '{$p['descripcion']}' por $ {$p['monto']} vence el día {$p['fecha_limite']}.";
+            foreach ($pendientes as $p) {
+                $nombre_completo = $p['nombre'] . ' ' . $p['apellido_paterno'];
+                $fecha_formateada = date("d-m-Y", strtotime($p['fecha_limite']));
+                
+                $asunto = "⏰ Recordatorio: Pago de " . $p['descripcion'];
+                
+                $mensaje = "Hola $nombre_completo, este es un recordatorio automático. \n\n" .
+                           "Tu pago recurrente de '{$p['descripcion']}' por $" . number_format($p['monto'], 2) . 
+                           " tiene como fecha límite el día $fecha_formateada. \n\n" .
+                           "¡Evita recargos!";
 
-            // ¡REUTILIZAMOS TU FUNCIÓN CORREO! 
-            // Ella se encarga de hablarle a Pipedream.
-            $registroModel->Correo($nombre_completo, $mensaje, $p['correo'], $asunto);
-            
-            $contador++;
+                $registroModel->Correo($nombre_completo, $mensaje, $p['correo'], $asunto);
+                $contador++;
+            }
+
+            return ["estatus" => true, "mensaje" => "Se enviaron $contador notificaciones de cobro."];
+
+        } catch (PDOException $e) {
+  
+            return ["estatus" => false, "error" => $e->getMessage()];
         }
-
-        return ["estatus" => true, "mensaje" => "Se enviaron $contador notificaciones."];
     }
 }
 
-// Ejecutar
+
 $notificador = new Notificador();
 echo json_encode($notificador->procesarNotificaciones());
 ?>

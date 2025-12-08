@@ -1,9 +1,11 @@
 <?php
+header('Content-Type: application/json');
+
 require_once("../config/conexion.php");
 require_once("../models/Ingreso.php");
-require_once("../models/Egreso.php");
-$egreso = new Egreso();
+
 $ingreso = new Ingreso();
+
 
 $body = json_decode(file_get_contents("php://input"), true);
 
@@ -19,11 +21,18 @@ switch ($_GET["opcion"]) {
         echo json_encode($datos);
         break;
 
+
+    case "Getinfo":
+        $datos = $ingreso->getinfo($body["id"]);
+        echo json_encode($datos);
+        break;
+
+
     case "Insert":
         $datos = $ingreso->insert_ingreso(
             $body["descripcion"],
             $body["monto"],
-            $body["fecha_registro"],
+            $body["fecha_registro"], 
             $body["fecha_pago"],
             $body["tbl_concepto_id"],
             $body["tbl_tipo_pago_id"],
@@ -48,24 +57,30 @@ switch ($_GET["opcion"]) {
         echo json_encode($datos);
         break;
 
+
     case "Delete":
         $datos = $ingreso->delete($body["id"]);
         echo json_encode($datos);
         break;
 
-    case "Getinfo":
-        $datos = [...$ingreso->get_ingreso2($body["id"]), ...$egreso->get_egreso2($body["id"])];
-        echo json_encode($datos);
-        break;
-
 
     case "Getsuma":
-        $datos = ['ingreso' => $ingreso->get_suma($body["id"]), 'egreso' => $egreso->get_suma($body["id"])];
-        echo json_encode($datos);
-        break;
+    require_once("../models/Egreso.php");
+    $egreso = new Egreso();
+    
+    $totalIngreso = $ingreso->get_suma($body["id"]);
+    $totalEgreso = $egreso->get_suma($body["id"]);
+    
+
+    echo json_encode([
+        "ingreso" => (float)$totalIngreso,
+        "egreso" => (float)$totalEgreso
+    ]);
+    break;
 
     case "graficaMes":
         $datos = $ingreso->get_monto($body["id"]);
         echo json_encode($datos);
         break;
 }
+?>

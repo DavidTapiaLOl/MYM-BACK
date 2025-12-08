@@ -26,7 +26,7 @@ class Login extends Conectar
                     'estatus' => true,
                     'id' => (int)$resultado->id,
                     'usuario' => $resultado->usuario,
-                    'foto_perfil' => $resultado->foto_perfil, // Importante para el Navbar
+                    'foto_perfil' => $resultado->foto_perfil, 
                     // No devolvemos el password por seguridad
                 ];
             } else {
